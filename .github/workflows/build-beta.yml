@@ -1,9 +1,10 @@
 name: Beta 构建
 
+# 本仓库的自动构建已由 build-hires.yml 承担（代码改动即出 app-arm64-v8a-release.apk）。
+# 此文件是上游 maotoumao/MusicFree 的 dev 分支发布流程，原样保留以维持上游一致性，
+# 但去掉了 push 触发：它依赖 package.json 里的 -beta.xx 版本号与 dev 分支，
+# 在本仓库的 main 分支上只会空跑失败，需要时手动触发即可。
 on:
-  push:
-    branches: [dev]
-    paths: ['package.json']
   workflow_dispatch:
     inputs:
       force_build:
