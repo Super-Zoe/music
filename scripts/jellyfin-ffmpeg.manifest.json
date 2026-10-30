@@ -1,0 +1,26 @@
+{
+  "$comment": "Jellyfin FFmpeg Android 产物清单。上游 jellyfin/jellyfin-ffmpeg 目前只发布 Linux/Windows/macOS 包，Android 产物需自行交叉编译（见 docs/BUILD.md）或使用第三方预编译包。在此填写 url + sha256 即可让 fetch 脚本直接拉取。",
+  "version": "7.1.2-5",
+  "abis": {
+    "arm64-v8a": {
+      "url": "",
+      "sha256": "",
+      "archiveInnerPath": ""
+    },
+    "armeabi-v7a": {
+      "url": "",
+      "sha256": "",
+      "archiveInnerPath": ""
+    },
+    "x86": {
+      "url": "",
+      "sha256": "",
+      "archiveInnerPath": ""
+    },
+    "x86_64": {
+      "url": "",
+      "sha256": "",
+      "archiveInnerPath": ""
+    }
+  }
+}
