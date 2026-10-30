@@ -1,6 +1,22 @@
-name: 构建 HiRes APK
+name: 构建 arm64 release APK
 
 on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+    # 纯文档改动不必触发构建
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.imgs/**'
+      - 'LICENSE'
+      - 'NOTICE'
+  pull_request:
+    branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.imgs/**'
   workflow_dispatch:
     inputs:
       ffmpeg_url:
@@ -11,14 +27,27 @@ on:
         description: '产物 SHA256（可选）'
         required: false
         type: string
-  push:
-    tags: ['v*']
+
+concurrency:
+  group: hires-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 读取版本号
+        id: ver
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "版本: $VERSION ($(git rev-parse --short HEAD))"
 
       - uses: actions/setup-java@v4
         with:
@@ -47,27 +76,94 @@ jobs:
           if [ -n "$FFMPEG_SHA256" ]; then ARGS="$ARGS --sha256 $FFMPEG_SHA256"; fi
           node scripts/fetch-jellyfin-ffmpeg.mjs $ARGS
 
+      # 签名：有仓库机密就用正式签名，否则现场生成一份 CI 自签密钥，
+      # 保证 assembleRelease 永远不会因为缺少 keystore 而失败。
       - name: 配置签名
-        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
         run: |
-          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
-          cat > android/keystore.properties << 'EOF'
+          set -euo pipefail
+          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "使用仓库机密中的正式签名密钥"
+            echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+            cat > android/keystore.properties <<EOF
           RELEASE_STORE_FILE=release.keystore
           RELEASE_STORE_PASSWORD=${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS=${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD=${{ secrets.RELEASE_KEY_PASSWORD }}
           EOF
+          else
+            echo "::warning::未配置签名机密，改用 CI 临时自签密钥（仅供下载安装，不可用于发布渠道）"
+            keytool -genkeypair -v \
+              -keystore android/app/release.keystore \
+              -storetype JKS \
+              -alias hires-ci -keyalg RSA -keysize 2048 -validity 10950 \
+              -storepass hires-ci -keypass hires-ci \
+              -dname "CN=MusicFree HiRes CI, OU=CI, O=MusicFree-HiRes"
+            cat > android/keystore.properties <<EOF
+          RELEASE_STORE_FILE=release.keystore
+          RELEASE_STORE_PASSWORD=hires-ci
+          RELEASE_KEY_ALIAS=hires-ci
+          RELEASE_KEY_PASSWORD=hires-ci
+          EOF
+          fi
           chmod 600 android/keystore.properties android/app/release.keystore
 
-      - name: 构建
+      - name: Gradle 构建
+        env:
+          GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=768m" -Dfile.encoding=UTF-8
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleRelease --parallel --build-cache
+          ./gradlew assembleRelease --parallel --build-cache --configure-on-demand
 
-      - name: 上传 APK
+      - name: 校验 arm64 产物
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          if [ ! -f "$APK" ]; then
+            echo "::error::未找到 arm64 产物，实际生成的 APK："
+            ls -lh android/app/build/outputs/apk/release/
+            exit 1
+          fi
+          SIZE=$(du -h "$APK" | cut -f1)
+          echo "产物: $APK ($SIZE)"
+          echo "### 📱 构建产物" >> $GITHUB_STEP_SUMMARY
+          echo "$(basename $APK) — $SIZE" >> $GITHUB_STEP_SUMMARY
+
+      - name: 上传 arm64 APK
         uses: actions/upload-artifact@v4
         with:
-          name: hires-apk
-          path: android/app/build/outputs/apk/release/*.apk
+          name: music-arm64-v8a-release
+          path: android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
           retention-days: 30
+
+      - name: 上传其余 ABI 与通用包
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-other-abis
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            !android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: 打 tag 时发布 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 构建摘要
+        run: |
+          {
+            echo "✅ arm64 release APK 构建完成"
+            echo "- 版本: ${{ steps.ver.outputs.version }}"
+            echo "- 提交: ${{ steps.ver.outputs.sha }}"
+            echo "- 分支: ${{ github.ref_name }}"
+            echo "- 触发: ${{ github.event_name }}"
+            if [ -z "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+              echo "- 签名: CI 临时自签（建议配置 RELEASE_* 机密以获得正式签名）"
+            fi
+          } >> $GITHUB_STEP_SUMMARY
