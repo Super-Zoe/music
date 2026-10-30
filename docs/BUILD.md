@@ -107,3 +107,34 @@ npm ci && npm run build-android
 
 此时 `FFmpegDecoder.isAvailable()` 返回 `false`，设置页显示"未集成"，
 应用行为与上游 MusicFree 完全一致（新的四种格式仍会扫描出来，但播放表现与上游相同）。
+
+## CI 自动构建（GitHub Actions）
+
+`.github/workflows/build-hires.yml` 会在**代码发生改动时自动构建**
+`app-arm64-v8a-release.apk`：
+
+| 触发方式 | 说明 |
+| --- | --- |
+| 推送到 `main` / `master` | 最常用的自动构建路径 |
+| Pull Request | 合入前先验证能否构建出 APK |
+| 推送 tag `v*` | 构建并额外创建 GitHub Release，附上 arm64 APK |
+| 手动触发 | Actions 页面运行，可临时指定 FFmpeg 产物地址 |
+
+纯文档改动（`**.md`、`docs/**`、`.imgs/**`、`LICENSE`、`NOTICE`）不会触发构建。
+同一分支上的新推送会自动取消上一次未完成的构建，避免排队浪费时长。
+
+**产物**：
+
+- `music-arm64-v8a-release` —— `app-arm64-v8a-release.apk`，保留 30 天
+- `music-other-abis` —— 其余 ABI 分包与 universal 包，保留 7 天
+
+**签名**：仓库若配置了 `RELEASE_KEYSTORE_BASE64`、`RELEASE_STORE_PASSWORD`、
+`RELEASE_KEY_ALIAS`、`RELEASE_KEY_PASSWORD` 四个机密，就用正式签名；
+**没有配置也不会构建失败**，会现场生成一份 CI 自签密钥（`hires-ci`），
+并在构建摘要里给出警告。注意这种情况下签名每次都可能变化，
+只适合下载安装验证，不要用于正式发布渠道。
+
+**让 CI 构建出带解码扩展的版本**：在仓库 Settings → Variables 里配置
+`FFMPEG_ANDROID_URL`（以及可选的 `FFMPEG_ANDROID_SHA256`），
+构建时会自动 `node scripts/fetch-jellyfin-ffmpeg.mjs` 拉取并放入
+`android/app/src/main/jniLibs/<abi>/`。未配置则构建出的 APK 与上游功能一致。
