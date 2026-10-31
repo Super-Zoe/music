@@ -34,7 +34,8 @@ docs/*
 | `src/pages/setting/settingTypes/basicSetting.tsx` | 新增 import + 一个 section | 中 |
 | `src/core/i18n/languages/*.json` | 三语各新增 16 个 key | 中（若上游也改同一区域） |
 | `android/app/src/main/java/.../MainApplication.kt` | + `add(FFmpegDecoderPackage())` | 低 |
-| `android/app/build.gradle` | + `packagingOptions { jniLibs.useLegacyPackaging = true }` | 低 |
+| `android/app/build.gradle` | + `packagingOptions { jniLibs.useLegacyPackaging = true }`；`applicationId` 改为 `fun.upup.musicfree.hires`（`namespace` 保持不变，R 类与 `java/` 目录不动） | 低 |
+| `android/app/src/main/res/values/strings.xml` | `app_name` / `playback_channel_name` → `MusicFree HiRes` | 低 |
 | `android/app/src/main/AndroidManifest.xml` | + 8 个 intent-filter | 低 |
 | `package.json` | name / version / scripts / repository / upstream | 低 |
 | `jest.config.js` | + `testPathIgnorePatterns` | 低 |
@@ -80,4 +81,6 @@ git merge upstream/dev        # 或对应分支
 - **插件协议**：`IPluginDefine` 未改，上游插件可直接安装使用；本版本也不产出上游装不了的插件。
 - **降级**：把 `decode.prefs.enabled` 设为 `false`，或直接不打包 FFmpeg，
   运行路径即等价于上游。
+- **包名**：本项目包名是 `fun.upup.musicfree.hires`，与官方版 `fun.upup.musicfree` 不同，
+  两版可**同时安装**；签名不同也不影响。歌单/设置的备份文件仍与上游互相可导入。
 - **npm 依赖**：未新增任何依赖，`package-lock.json` 与上游保持可 diff 状态。

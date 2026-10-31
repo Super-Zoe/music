@@ -131,7 +131,10 @@ android {
     }
 
     defaultConfig {
-        applicationId "fun.upup.musicfree"
+        // ↓ 解码扩展：改为独立包名，与官方 MusicFree 共存（两者互不覆盖安装）。
+        //   namespace 保持 fun.upup.musicfree 不变，因此 R 类与 java/ 目录路径无需改动，
+        //   与上游同步时的冲突面仍只有这一行。
+        applicationId "fun.upup.musicfree.hires"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode appVersionCode

@@ -199,6 +199,10 @@ if (decoded.url !== source.url) {
 
 ## 与上游版本的兼容性
 
+- **包名与共存**：本项目 `applicationId` 为 `fun.upup.musicfree.hires`，官方版为
+  `fun.upup.musicfree`，两者**可同时安装**，互不覆盖（桌面图标显示为 MusicFree HiRes）。
+  两版的歌单/设置备份文件仍可互相导入。
+
 - **基线**：[maotoumao/MusicFree](https://github.com/maotoumao/MusicFree) `1.0.0-beta.4`
 - **不改动的内容**：插件协议、插件管理器、歌单/历史/配置的数据结构、播放器主体、UI 主题体系、备份格式
 - **改动方式**：全部为**新增文件 + 局部插入**，没有删除或重写上游模块（详见 `docs/UPSTREAM.md`）

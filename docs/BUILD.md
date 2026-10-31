@@ -91,10 +91,10 @@ Android 只会把 APK 中 `lib/<abi>/` 下、**以 `lib` 开头且以 `.so` 结�
 ## 验证
 
 ```bash
-adb shell run-as fun.upup.musicfree ls -l files/jellyfin_ffmpeg
-adb shell run-as fun.upup.musicfree ./files/jellyfin_ffmpeg -version
+adb shell run-as fun.upup.musicfree.hires ls -l files/jellyfin_ffmpeg
+adb shell run-as fun.upup.musicfree.hires ./files/jellyfin_ffmpeg -version
 # 期望看到 jellyfin 的版本号与 --enable-libsoxr 等配置
-adb shell run-as fun.upup.musicfree ./files/jellyfin_ffmpeg -hide_banner -decoders | grep -E "dsd|ape|alac"
+adb shell run-as fun.upup.musicfree.hires ./files/jellyfin_ffmpeg -hide_banner -decoders | grep -E "dsd|ape|alac"
 ```
 
 ## 不编译也可以
