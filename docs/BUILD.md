@@ -134,7 +134,20 @@ npm ci && npm run build-android
 并在构建摘要里给出警告。注意这种情况下签名每次都可能变化，
 只适合下载安装验证，不要用于正式发布渠道。
 
-**让 CI 构建出带解码扩展的版本**：在仓库 Settings → Variables 里配置
-`FFMPEG_ANDROID_URL`（以及可选的 `FFMPEG_ANDROID_SHA256`），
-构建时会自动 `node scripts/fetch-jellyfin-ffmpeg.mjs` 拉取并放入
-`android/app/src/main/jniLibs/<abi>/`。未配置则构建出的 APK 与上游功能一致。
+**让 CI 构建出带解码扩展的版本**（无需本地编译，推荐）：
+
+1. 在 Actions 页面运行 **「编译 Android FFmpeg」**（workflow `build-ffmpeg.yml`）。
+   它会自动下载 NDK、交叉编译静态可执行文件，用 qemu 实际跑一遍确认可用，
+   最后发布到 release tag `ffmpeg-android`（asset 名 `libjellyfin_ffmpeg_<abi>.so`）。
+2. 之后每次 `build-hires.yml` 构建 APK 时会自动从该 release 下载二进制，
+   放进 `android/app/src/main/jniLibs/<abi>/libjellyfin_ffmpeg.so`，一并打进 APK。
+3. 编译耗时约 20~40 分钟，成品用 `actions/cache` 缓存，不会每次重编。
+
+想用外部产物代替，可在仓库 Variables 配 `FFMPEG_ANDROID_URL`（可选 `FFMPEG_ANDROID_SHA256`），
+构建时会走 `scripts/fetch-jellyfin-ffmpeg.mjs` 做下载与校验；两处都取不到时
+APK 照常构建，只是不含解码扩展。
+
+关于 libsoxr：编译脚本会尝试编译 libsoxr 并重采样链路的最优参数
+（`aresample=resampler=soxr` + shibata 抖动整形）。**没有编出 libsoxr 也不会失效**——
+`decodeRouter` 检测到这类转码失败后会自动降级为 FFmpeg 内置重采样器重试一次，
+DSD 依然可以播放，只是重采样质量略低。这条降级路径有单测覆盖。

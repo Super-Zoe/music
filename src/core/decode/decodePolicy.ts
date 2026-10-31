@@ -99,6 +99,25 @@ function dsdArgs(prefs: IDecodePreferences): string[] {
     ];
 }
 
+/**
+ * 把依赖 libsoxr 的参数降为 FFmpeg 内置重采样器（swresample）。
+ *
+ * 自行编译的 FFmpeg 未必带 libsoxr，此时 `aresample=resampler=soxr` 会直接报错。
+ * 降级后的 filter_size / cutoff 是 swresample 的高质量参数，
+ * 音质略逊于 soxr + shibata 抖动整形，但能保证 DSD 依然可以播放。
+ *
+ * @returns 降级后的参数；原参数不含 soxr 时返回 null（表示无法降级）
+ */
+export function downgradeResamplerArgs(args: string[]): string[] | null {
+    const idx = args.findIndex(a => a.includes("resampler=soxr"));
+    if (idx < 0) {
+        return null;
+    }
+    const next = [...args];
+    next[idx] = "aresample=filter_size=64:cutoff=0.98";
+    return next;
+}
+
 /** 非 DSD 无损源（APE / AIFF）的转码参数 */
 function losslessArgs(
     prefs: IDecodePreferences,

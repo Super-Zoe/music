@@ -17,6 +17,7 @@
 import { buildCacheKey } from "./cacheKey";
 import {
     decideDecodePlan,
+    downgradeResamplerArgs,
     getDefaultPreferences,
 } from "./decodePolicy";
 import type { IDeviceCapabilities } from "./decodePolicy";
@@ -129,7 +130,7 @@ export function createDecodeRouter(deps: IDecodeRouterDeps): IDecodeRouter {
             };
         }
         const target = await cache.resolve(key, plan.outputExt);
-        const out = await native.transcode(
+        const out = await transcodeWithFallback(
             request.url,
             plan.ffmpegArgs,
             plan.outputExt,
@@ -163,6 +164,34 @@ export function createDecodeRouter(deps: IDecodeRouterDeps): IDecodeRouter {
             cachePath: null,
             probe: request.probe ?? null,
         };
+    }
+
+    /**
+     * 转码，并在失败时做一次降级重试。
+     *
+     * 自建的 Android FFmpeg 未必带 libsoxr，`aresample=resampler=soxr` 会报错；
+     * 此时换成内置重采样器再试一次，避免 DSD 因为一个可选依赖完全无法播放。
+     */
+    async function transcodeWithFallback(
+        url: string,
+        args: string[],
+        outputExt: string,
+        target: string,
+    ): Promise<string> {
+        try {
+            return await native.transcode(url, args, outputExt, target);
+        } catch (e) {
+            const fallback = downgradeResamplerArgs(args);
+            if (!fallback) {
+                throw e;
+            }
+            log("转码失败，降级为内置重采样器重试", {
+                error: String(e),
+                from: args.join(" "),
+                to: fallback.join(" "),
+            });
+            return await native.transcode(url, fallback, outputExt, target);
+        }
     }
 
     /** remux 产物自检：能被 probe 出时长即认为可播 */

@@ -23,6 +23,8 @@ interface IRecorder {
 function mockNative(options: {
     probeResult?: IProbeResult | null;
     transcodeShouldThrow?: boolean;
+    /** 仅在参数依赖 soxr 时抛错，用于模拟没有编译 libsoxr 的 ffmpeg */
+    transcodeThrowOnSoxr?: boolean;
     /** remux 产物自检用的 probe：下标 0 为源探测，之后为产物探测 */
     probeQueue?: Array<IProbeResult | null>;
 }) {
@@ -49,6 +51,9 @@ function mockNative(options: {
             rec.transcode.push({ url, args, ext });
             if (options.transcodeShouldThrow) {
                 throw new Error("ffmpeg crash");
+            }
+            if (options.transcodeThrowOnSoxr && args.some(a => a.includes("resampler=soxr"))) {
+                throw new Error("Cannot find aresampler resampler=soxr");
             }
             return `/cache/out${ext}`;
         },
@@ -205,6 +210,37 @@ test(SUITE, "probe 只在需要的格式上触发", async () => {
     assert.equal(m.rec.probe.length, 0);
     await router.resolve({ url: "/a.ape" });
     assert.equal(m.rec.probe.length, 1);
+});
+
+test(SUITE, "无 libsoxr 的 ffmpeg：DSD 转码失败后自动降级重试", async () => {
+    const m = mockNative({ transcodeThrowOnSoxr: true });
+    const router = buildRouter(m, {}, 10 * 1024 * 1024);
+    const res = await router.resolve({ url: "/a.dsf" });
+    assert.equal(res.decoded, true);
+    assert.equal(res.strategy, "transcode");
+    assert.equal(m.rec.transcode.length, 2, "应当重试一次");
+    assert.ok(m.rec.transcode[0].args.join(" ").includes("resampler=soxr"));
+    const retry = m.rec.transcode[1].args.join(" ");
+    assert.ok(!retry.includes("resampler=soxr"), "重试不该再用 soxr");
+    assert.ok(retry.includes("aresample=filter_size=64"), "应换成内置重采样器");
+});
+
+test(SUITE, "降级也无法挽救时只尝试一次并回退", async () => {
+    const m = mockNative({ transcodeShouldThrow: true });
+    const router = buildRouter(m, {}, 10 * 1024 * 1024);
+    // APE 的参数不含 soxr，没有可降级的空间
+    const res = await router.resolve({ url: "/a.ape" });
+    assert.equal(res.decoded, false, "失败应回退 passthrough");
+    assert.equal(m.rec.transcode.length, 1, "无法降级则不应重试");
+});
+
+test(SUITE, "带 libsoxr 的 ffmpeg 不会触发多余重试", async () => {
+    const m = mockNative({});
+    const router = buildRouter(m, {}, 10 * 1024 * 1024);
+    const res = await router.resolve({ url: "/a.dsf" });
+    assert.equal(res.decoded, true);
+    assert.equal(m.rec.transcode.length, 1);
+    assert.ok(m.rec.transcode[0].args.join(" ").includes("resampler=soxr"));
 });
 
 test(SUITE, "needsDecode 轻量判定", () => {

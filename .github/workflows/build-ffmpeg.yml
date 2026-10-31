@@ -1,0 +1,126 @@
+name: 编译 Android FFmpeg
+
+on:
+  workflow_dispatch:
+    inputs:
+      abi:
+        description: '目标 ABI'
+        required: false
+        default: 'arm64-v8a'
+        type: choice
+        options: [arm64-v8a, armeabi-v7a]
+      publish:
+        description: '发布到 release tag ffmpeg-android（供 APK 构建自动下载）'
+        required: false
+        default: true
+        type: boolean
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-ffmpeg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装构建依赖
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config nasm yasm \
+            qemu-user-static file
+
+      - name: 安装 NDK
+        run: |
+          set -e
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "SDK=$SDK"
+          SM=$(ls "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1 || true)
+          if [ -z "$SM" ]; then
+            echo "安装 cmdline-tools"
+            mkdir -p "$SDK/cmdline-tools/latest"
+            curl -fsSL -o /tmp/cmdtools.zip \
+              https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q /tmp/cmdtools.zip -d /tmp/cmdtools
+            mv /tmp/cmdtools/cmdline-tools/* "$SDK/cmdline-tools/latest/"
+            SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          yes 2>/dev/null | "$SM" --sdk_root="$SDK" --install "ndk;26.1.10909125" > /dev/null || true
+          ls "$SDK"
+          test -d "$SDK/ndk/26.1.10909125" || { echo "::error::NDK 安装失败"; exit 1; }
+
+      # 编译耗时长（2 核约 20~40 分钟），缓存 strip 后的成品，后续构建直接复用
+      - name: 缓存 FFmpeg 二进制
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: android/app/src/main/jniLibs/${{ inputs.abi || 'arm64-v8a' }}
+          key: ffmpeg-${{ inputs.abi || 'arm64-v8a' }}-n7.1.1-api24-${{ hashFiles('scripts/build-ffmpeg-android.sh') }}
+
+      - name: 交叉编译 FFmpeg
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          ABI: ${{ inputs.abi || 'arm64-v8a' }}
+          API: '24'
+          FFMPEG_TAG: 'n7.1.1'
+        run: |
+          chmod +x scripts/build-ffmpeg-android.sh
+          ./scripts/build-ffmpeg-android.sh
+
+      - name: 校验二进制
+        env:
+          ABI: ${{ inputs.abi || 'arm64-v8a' }}
+        run: |
+          set -euo pipefail
+          BIN="android/app/src/main/jniLibs/$ABI/libjellyfin_ffmpeg.so"
+          test -f "$BIN" || { echo "::error::缺少产物 $BIN"; exit 1; }
+          echo "file: $(file -b "$BIN")"
+          SIZE=$(du -h "$BIN" | cut -f1)
+          echo "大小: $SIZE"
+          case "$ABI" in
+            arm64-v8a) QEMU=qemu-aarch64 ;;
+            armeabi-v7a) QEMU=qemu-arm ;;
+          esac
+          "$QEMU" "$BIN" -hide_banner -version | head -3
+          echo "--- 所需解码/解复用能力 ---"
+          "$QEMU" "$BIN" -hide_banner -decoders 2>/dev/null \
+            | grep -Ew 'alac|ape|dsd_lsbf|dsd_msbf' | sort -u
+          "$QEMU" "$BIN" -hide_banner -demuxers 2>/dev/null \
+            | grep -Ew 'dsf|ape|aiff|caf|mov' | sort -u
+          echo "size=$SIZE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 上传 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libjellyfin_ffmpeg-${{ inputs.abi || 'arm64-v8a' }}
+          path: android/app/src/main/jniLibs/${{ inputs.abi || 'arm64-v8a' }}/libjellyfin_ffmpeg.so
+          retention-days: 90
+
+      # asset 名带上 ABI，避免多个 ABI 发布到同一 release 时互相覆盖
+      - name: 准备发布文件
+        run: |
+          ABI="${{ inputs.abi || 'arm64-v8a' }}"
+          mkdir -p dist
+          cp "android/app/src/main/jniLibs/$ABI/libjellyfin_ffmpeg.so" \
+             "dist/libjellyfin_ffmpeg_$ABI.so"
+
+      - name: 发布到 release
+        if: inputs.publish != false
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ffmpeg-android
+          name: Android FFmpeg 二进制
+          body: |
+            由 build-ffmpeg.yml 自动编译的 Android FFmpeg 静态可执行文件。
+
+            - FFmpeg: n7.1.1
+            - ABI: ${{ inputs.abi || 'arm64-v8a' }}
+            - 用途：放为 `android/app/src/main/jniLibs/<abi>/libjellyfin_ffmpeg.so`，
+              build-hires.yml 会自动从本 release 下载并打进 APK。
+          files: dist/libjellyfin_ffmpeg_${{ inputs.abi || 'arm64-v8a' }}.so
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

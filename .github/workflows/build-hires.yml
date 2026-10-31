@@ -19,8 +19,13 @@ on:
       - '.imgs/**'
   workflow_dispatch:
     inputs:
+      with_ffmpeg:
+        description: '打进自编译的 FFmpeg（需要已运行过 build-ffmpeg.yml 并发布到 release）'
+        required: false
+        default: true
+        type: boolean
       ffmpeg_url:
-        description: 'Jellyfin FFmpeg Android 产物压缩包地址（留空则构建不含解码扩展的版本）'
+        description: 'Jellyfin FFmpeg Android 产物压缩包地址（留空则用 release 里的成品）'
         required: false
         type: string
       ffmpeg_sha256:
@@ -66,15 +71,42 @@ jobs:
       - name: 解码逻辑测试
         run: node --experimental-strip-types scripts/run-decode-tests.mjs
 
-      - name: 拉取 Jellyfin FFmpeg 产物
-        if: ${{ inputs.ffmpeg_url != '' || vars.FFMPEG_ANDROID_URL != '' }}
+      # FFmpeg 二进制：优先用 release 里已编译好的成品（由 build-ffmpeg.yml 发布），
+      # 也可用变量指定外部压缩包（交给 fetch 脚本做 sha256 校验与解包）。
+      # 两者都拿不到时不算失败，仍然构建出与上游功能一致的 APK。
+      - name: 准备 Android FFmpeg 二进制
+        id: ffmpeg
+        continue-on-error: true
         env:
-          FFMPEG_URL: ${{ inputs.ffmpeg_url || vars.FFMPEG_ANDROID_URL }}
-          FFMPEG_SHA256: ${{ inputs.ffmpeg_sha256 || vars.FFMPEG_ANDROID_SHA256 }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FFMPEG_ABIS: arm64-v8a
         run: |
-          ARGS="--abi arm64-v8a,armeabi-v7a --url $FFMPEG_URL"
-          if [ -n "$FFMPEG_SHA256" ]; then ARGS="$ARGS --sha256 $FFMPEG_SHA256"; fi
-          node scripts/fetch-jellyfin-ffmpeg.mjs $ARGS
+          set -euo pipefail
+          if [ -n "${{ vars.FFMPEG_ANDROID_URL }}" ]; then
+            echo "使用 vars.FFMPEG_ANDROID_URL 指定的产物"
+            node scripts/fetch-jellyfin-ffmpeg.mjs \
+              --abi "$FFMPEG_ABIS" \
+              --url "${{ vars.FFMPEG_ANDROID_URL }}"
+          else
+            echo "从 release tag ffmpeg-android 下载成品"
+            for ABI in $FFMPEG_ABIS; do
+              DEST="android/app/src/main/jniLibs/$ABI"
+              mkdir -p "$DEST"
+              gh release download ffmpeg-android \
+                --pattern "libjellyfin_ffmpeg_$ABI.so" --dir "$DEST"
+              mv "$DEST/libjellyfin_ffmpeg_$ABI.so" "$DEST/libjellyfin_ffmpeg.so"
+              chmod 755 "$DEST/libjellyfin_ffmpeg.so"
+            done
+          fi
+          ls -lh android/app/src/main/jniLibs/*/
+
+      - name: 解码能力标记
+        run: |
+          if [ -f android/app/src/main/jniLibs/arm64-v8a/libjellyfin_ffmpeg.so ]; then
+            echo "- FFmpeg: **已集成**（arm64-v8a）" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- FFmpeg: 未集成，本次 APK 的解码能力与上游一致" >> $GITHUB_STEP_SUMMARY
+          fi
 
       # 签名：有仓库机密就用正式签名，否则现场生成一份 CI 自签密钥，
       # 保证 assembleRelease 永远不会因为缺少 keystore 而失败。
