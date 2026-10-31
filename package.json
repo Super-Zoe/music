@@ -1,5 +1,5 @@
 {
-  "name": "musicfree-hires",
+  "name": "music",
   "version": "1.0.0-beta.4-hires.1",
   "private": true,
   "license": "AGPL",
@@ -132,7 +132,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/musicfree-hires/MusicFree-HiRes.git"
+    "url": "git+https://github.com/Super-Zoe/music.git"
   },
   "upstream": {
     "name": "MusicFree",

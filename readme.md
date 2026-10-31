@@ -1,4 +1,4 @@
-# MusicFree-HiRes
+# Music
 
 > 基于 [MusicFree](https://github.com/maotoumao/MusicFree) `1.0.0-beta.4` 的二次开发版本，
 > 集成 **Jellyfin FFmpeg** 解码扩展，补齐 **ALAC / APE / DSF / DFF** 四种高解析音频格式的播放能力。
@@ -77,7 +77,7 @@ Monkey's Audio(`.ape`)、DSD 的两种容器 `.dsf` / `.dff`，以及容器不�
 ## 目录结构
 
 ```
-MusicFree-HiRes/
+Music/
 ├── android/
 │   └── app/src/main/
 │       ├── java/fun/upup/musicfree/
@@ -200,7 +200,7 @@ if (decoded.url !== source.url) {
 ## 与上游版本的兼容性
 
 - **包名与共存**：本项目 `applicationId` 为 `fun.upup.musicfree.hires`，官方版为
-  `fun.upup.musicfree`，两者**可同时安装**，互不覆盖（桌面图标显示为 MusicFree HiRes）。
+  `fun.upup.musicfree`，两者**可同时安装**，互不覆盖（应用名与桌面图标显示为 Music）。
   两版的歌单/设置备份文件仍可互相导入。
 
 - **基线**：[maotoumao/MusicFree](https://github.com/maotoumao/MusicFree) `1.0.0-beta.4`

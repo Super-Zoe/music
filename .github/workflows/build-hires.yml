@@ -134,7 +134,7 @@ jobs:
               -storetype JKS \
               -alias hires-ci -keyalg RSA -keysize 2048 -validity 10950 \
               -storepass hires-ci -keypass hires-ci \
-              -dname "CN=MusicFree HiRes CI, OU=CI, O=MusicFree-HiRes"
+              -dname "CN=Music CI, OU=CI, O=Music"
             cat > android/keystore.properties <<EOF
           RELEASE_STORE_FILE=release.keystore
           RELEASE_STORE_PASSWORD=hires-ci
@@ -196,12 +196,12 @@ jobs:
         run: |
           set -euo pipefail
           APK=android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
-          OUT="MusicFree-HiRes-arm64-v8a.apk"
+          OUT="Music-arm64-v8a.apk"
           cp "$APK" "$OUT"
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TAG="${{ github.ref_name }}"
             EXTRA=()
-            TITLE="MusicFree-HiRes ${{ github.ref_name }}"
+            TITLE="Music ${{ github.ref_name }}"
           else
             TAG=apk-latest
             EXTRA=(--prerelease)
@@ -217,8 +217,9 @@ jobs:
           - FFmpeg：内置静态可执行 lib/arm64-v8a/libjellyfin_ffmpeg.so，支持 ALAC / APE / DSF / DFF
           - 触发：${{ github.event_name }} @ ${{ github.ref_name }}
 
-          安装注意：未配置正式签名机密时为 CI 自签包，与官方 MusicFree 签名不同，
-          需先卸载官方版再安装，不能覆盖升级。"
+          安装注意：包名 fun.upup.musicfree.hires，与官方 MusicFree 可共存，无需卸载官方版。
+          已配置 RELEASE_* 机密时使用固定发布签名，同包名可直接覆盖升级；
+          未配置时回退为 CI 临时自签，密钥可能变化，升级需先卸载。"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$OUT" --clobber
             gh release edit "$TAG" --notes "$NOTES"

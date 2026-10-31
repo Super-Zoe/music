@@ -1,4 +1,4 @@
-# MusicFree-HiRes
+# Music
 
 > A fork of [MusicFree](https://github.com/maotoumao/MusicFree) `1.0.0-beta.4` that integrates the
 > **Jellyfin FFmpeg** decoder extension to add playback support for **ALAC / APE / DSF / DFF**.

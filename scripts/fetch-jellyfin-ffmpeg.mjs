@@ -149,7 +149,7 @@ async function resolveFromUpstream(abi, version) {
         ? `https://api.github.com/repos/${UPSTREAM_REPO}/releases/tags/v${version}`
         : `https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest`;
     const res = await fetch(api, {
-        headers: { Accept: "application/vnd.github+json", "User-Agent": "MusicFree-HiRes" },
+        headers: { Accept: "application/vnd.github+json", "User-Agent": "Music" },
     });
     if (!res.ok) {
         throw new Error(`查询上游 release 失败：HTTP ${res.status}`);

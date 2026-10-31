@@ -35,7 +35,8 @@ docs/*
 | `src/core/i18n/languages/*.json` | 三语各新增 16 个 key | 中（若上游也改同一区域） |
 | `android/app/src/main/java/.../MainApplication.kt` | + `add(FFmpegDecoderPackage())` | 低 |
 | `android/app/build.gradle` | + `packagingOptions { jniLibs.useLegacyPackaging = true }`；`applicationId` 改为 `fun.upup.musicfree.hires`（`namespace` 保持不变，R 类与 `java/` 目录不动） | 低 |
-| `android/app/src/main/res/values/strings.xml` | `app_name` / `playback_channel_name` → `MusicFree HiRes` | 低 |
+| `android/app/src/main/res/values/strings.xml` | `app_name` / `playback_channel_name` / `rntp_temporary_channel_name` → `Music`（渠道 id 保留） | 低 |
+| `app.json` / `MainActivity.kt` | RN 组件名与应用名统一为 `Music`（两处必须同步，否则启动白屏） | 低 |
 | `android/app/src/main/AndroidManifest.xml` | + 8 个 intent-filter | 低 |
 | `package.json` | name / version / scripts / repository / upstream | 低 |
 | `jest.config.js` | + `testPathIgnorePatterns` | 低 |
