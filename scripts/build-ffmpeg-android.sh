@@ -27,6 +27,12 @@ FFMPEG_TAG="${FFMPEG_TAG:-n7.1.1}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 2)}"
 OUT_DIR="${OUT_DIR:-android/app/src/main/jniLibs}"
 SKIP_SOXR="${SKIP_SOXR:-0}"
+# 后面为了跑 configure 会 cd 进 FFmpeg 源码目录，一旦 OUT_DIR 是相对路径，
+# 产物就会被写进源码目录里的 android/app/... 从而丢失。先归一化成绝对路径。
+case "$OUT_DIR" in
+  /*) ;;
+  *)  OUT_DIR="$(pwd)/$OUT_DIR" ;;
+esac
 
 WORK="${WORK:-$(pwd)/.ffmpeg-build}"
 PREFIX="$WORK/prefix/$ABI"
