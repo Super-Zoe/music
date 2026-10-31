@@ -39,7 +39,7 @@ docs/*
 | `package.json` | name / version / scripts / repository / upstream | 低 |
 | `jest.config.js` | + `testPathIgnorePatterns` | 低 |
 | `.gitignore` | `!scripts/`、忽略 jniLibs 产物 | 低 |
-| `.github/workflows/build-beta.yml` | 去掉 `push` 触发（改为仅手动），`force_build` 的 `default` 改为布尔字面量 | 低 |
+| `.github/workflows/build-beta.yml` | 移出 workflow 目录，落到 `docs/upstream-workflows/`，内容保留 | 低 |
 
 所有插入处都以 `解码扩展` / `Decode extension` 注释开头，`git log -S "解码扩展"` 可全部列出。
 
@@ -49,13 +49,13 @@ docs/*
 `app-arm64-v8a-release.apk`，详见 `docs/BUILD.md` 的「CI 自动构建」一节。
 
 上游的 `build-beta.yml` 是针对 upstream 作者 `dev` 分支的发布流程，依赖 `package.json`
-里 `-beta.xx` 格式的版本号，在本仓库的 `main` 分支上只会空跑并报失败。因此这里只
-**去掉了它的 `push` 触发条件**，其余逻辑保持原样，需要时在 Actions 页面手动触发仍可用。
-将来同步上游 workflow 时，注意这里少了一段 `on.push`。
+里 `-beta.xx` 格式的版本号，在本仓库的 `main` 分支上跑不通。它每次 `push` 都会产生一个
+**0 job、以文件路径命名的失败 run**（GitHub 判定该 workflow 定义无效时的典型表现），
+污染 Actions 页面。
 
-> 补充：该文件原本把 boolean 类型的 input 默认值写成字符串 `default: 'false'`，
-> GitHub 的 workflow schema 校验不通过（表现为每次 push 都产生一个 0 job、
-> 以文件路径命名的失败 run），已改为布尔字面量 `false`。
+处理方式：**把它移出 `.github/workflows/`，落到 `docs/upstream-workflows/build-beta.yml`**。
+GitHub 只加载 `.github/workflows/` 下的文件，移到别处即完全不参与 CI，
+而原文一字不改地保留在那里，方便将来与上游对比。需要启用时复制回原路径即可。
 
 ## 同步步骤
 

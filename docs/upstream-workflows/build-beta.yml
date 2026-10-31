@@ -1,9 +1,16 @@
-name: Beta 构建
+# 本文件是上游 maotoumao/MusicFree 的 dev 分支发布流程原文，已从
+# .github/workflows/ 移到此目录：GitHub 只加载 .github/workflows/ 下的文件，
+# 放在这里就不会参与 CI，内容仍然保留以便与上游对比。
+#
+# 为什么移走：
+#   1. 它依赖 package.json 里 -beta.xx 格式的版本号和 dev 分支，在本仓库的
+#      main 分支上只会空跑失败；
+#   2. 推向 GitHub 后它每次 push 都会产生一个 0 job 的失败 run（run 名回退成
+#      文件路径），污染 Actions 页面；本仓库的自动构建已由 build-hires.yml 承担。
+#
+# 需要恢复时把本文件复制回 .github/workflows/build-beta.yml 即可。
 
-# 本仓库的自动构建已由 build-hires.yml 承担（代码改动即出 app-arm64-v8a-release.apk）。
-# 此文件是上游 maotoumao/MusicFree 的 dev 分支发布流程，原样保留以维持上游一致性，
-# 但去掉了 push 触发：它依赖 package.json 里的 -beta.xx 版本号与 dev 分支，
-# 在本仓库的 main 分支上只会空跑失败，需要时手动触发即可。
+name: Beta 构建
 on:
   workflow_dispatch:
     inputs:

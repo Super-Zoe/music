@@ -14,8 +14,9 @@ on:
         required: false
         default: true
         type: boolean
-  release:
-    types: [published]
+  # 注意：这里不能监听 release published —— 本 workflow 自己就会发布 release tag
+  # ffmpeg-android，会造成「编译 -> 发布 release -> 再次触发编译」的无限循环。
+  # 需要构建带解码扩展的 APK 时手动运行一次即可，后续 APK 构建会自动复用产物。
 
 permissions:
   contents: write
