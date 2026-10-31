@@ -110,8 +110,9 @@ class FFmpegDecoderModule(private val reactContext: ReactApplicationContext) :
             return
         }
         try {
-            val out = exec(bin, listOf("-hide_banner", "-version"), 5000)
-            promise.resolve(out.firstOrNull()?.trim())
+            // exec 返回 (stdout, stderr, exitCode)，stdout 的首行即版本字符串
+            val (stdout, _, _) = exec(bin, listOf("-hide_banner", "-version"), 5000)
+            promise.resolve(stdout.firstOrNull()?.trim())
         } catch (e: Exception) {
             promise.reject("E_FFMPEG", e.message)
         }
