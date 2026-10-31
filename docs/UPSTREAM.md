@@ -39,8 +39,19 @@ docs/*
 | `package.json` | name / version / scripts / repository / upstream | 低 |
 | `jest.config.js` | + `testPathIgnorePatterns` | 低 |
 | `.gitignore` | `!scripts/`、忽略 jniLibs 产物 | 低 |
+| `.github/workflows/build-beta.yml` | 去掉 `push` 触发（改为仅手动），原文保留 | 低 |
 
 所有插入处都以 `解码扩展` / `Decode extension` 注释开头，`git log -S "解码扩展"` 可全部列出。
+
+### CI 相关说明
+
+自动构建走新增的 `.github/workflows/build-hires.yml`：代码推送到 `main` 即产出
+`app-arm64-v8a-release.apk`，详见 `docs/BUILD.md` 的「CI 自动构建」一节。
+
+上游的 `build-beta.yml` 是针对 upstream 作者 `dev` 分支的发布流程，依赖 `package.json`
+里 `-beta.xx` 格式的版本号，在本仓库的 `main` 分支上只会空跑并报失败。因此这里只
+**去掉了它的 `push` 触发条件**，其余逻辑保持原样，需要时在 Actions 页面手动触发仍可用。
+将来同步上游 workflow 时，注意这里少了一段 `on.push`。
 
 ## 同步步骤
 
