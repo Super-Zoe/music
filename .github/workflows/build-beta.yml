@@ -10,7 +10,7 @@ on:
       force_build:
         description: '强制构建 Beta 版本'
         required: false
-        default: 'false'
+        default: false
         type: boolean
 
 jobs:

@@ -39,7 +39,7 @@ docs/*
 | `package.json` | name / version / scripts / repository / upstream | 低 |
 | `jest.config.js` | + `testPathIgnorePatterns` | 低 |
 | `.gitignore` | `!scripts/`、忽略 jniLibs 产物 | 低 |
-| `.github/workflows/build-beta.yml` | 去掉 `push` 触发（改为仅手动），原文保留 | 低 |
+| `.github/workflows/build-beta.yml` | 去掉 `push` 触发（改为仅手动），`force_build` 的 `default` 改为布尔字面量 | 低 |
 
 所有插入处都以 `解码扩展` / `Decode extension` 注释开头，`git log -S "解码扩展"` 可全部列出。
 
@@ -52,6 +52,10 @@ docs/*
 里 `-beta.xx` 格式的版本号，在本仓库的 `main` 分支上只会空跑并报失败。因此这里只
 **去掉了它的 `push` 触发条件**，其余逻辑保持原样，需要时在 Actions 页面手动触发仍可用。
 将来同步上游 workflow 时，注意这里少了一段 `on.push`。
+
+> 补充：该文件原本把 boolean 类型的 input 默认值写成字符串 `default: 'false'`，
+> GitHub 的 workflow schema 校验不通过（表现为每次 push 都产生一个 0 job、
+> 以文件路径命名的失败 run），已改为布尔字面量 `false`。
 
 ## 同步步骤
 
