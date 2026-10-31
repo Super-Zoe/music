@@ -29,10 +29,32 @@ jobs:
 
       - name: 安装构建依赖
         run: |
+          set -euo pipefail
           sudo apt-get update -qq
+          # nasm / file / strings 是必需项
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake pkg-config nasm yasm \
-            qemu-user-static file
+            build-essential cmake pkg-config nasm file binutils wget unzip python3
+          # yasm 在新版 Ubuntu 已被移除，FFmpeg 有 nasm 即可，装不上跳过
+          sudo apt-get install -y --no-install-recommends yasm \
+            || echo "跳过 yasm（FFmpeg 使用 nasm）"
+
+      # qemu 仅用于编译后真跑一遍二进制做能力校验。
+      # runner 镜像不保证提供（Ubuntu 26.04 已移除 qemu-user-static），
+      # 缺失时自动降级为静态检查，不阻塞编译。
+      - name: 安装 qemu（可选）
+        continue-on-error: true
+        id: qemu
+        run: |
+          set -euo pipefail
+          for pkg in qemu-user-static qemu-user qemu-user-binfmt; do
+            if sudo apt-get install -y --no-install-recommends "$pkg"; then
+              echo "available=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "::warning::qemu 不可用，将在校验步骤跳过运行测试"
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          exit 1
 
       - name: 安装 NDK
         run: |
@@ -78,19 +100,36 @@ jobs:
           set -euo pipefail
           BIN="android/app/src/main/jniLibs/$ABI/libjellyfin_ffmpeg.so"
           test -f "$BIN" || { echo "::error::缺少产物 $BIN"; exit 1; }
-          echo "file: $(file -b "$BIN")"
           SIZE=$(du -h "$BIN" | cut -f1)
           echo "大小: $SIZE"
+          file "$BIN"
           case "$ABI" in
-            arm64-v8a) QEMU=qemu-aarch64 ;;
-            armeabi-v7a) QEMU=qemu-arm ;;
+            arm64-v8a) QEMU=qemu-aarch64; ARCH=aarch64 ;;
+            armeabi-v7a) QEMU=qemu-arm; ARCH=ARM ;;
           esac
-          "$QEMU" "$BIN" -hide_banner -version | head -3
-          echo "--- 所需解码/解复用能力 ---"
-          "$QEMU" "$BIN" -hide_banner -decoders 2>/dev/null \
-            | grep -Ew 'alac|ape|dsd_lsbf|dsd_msbf' | sort -u
-          "$QEMU" "$BIN" -hide_banner -demuxers 2>/dev/null \
-            | grep -Ew 'dsf|ape|aiff|caf|mov' | sort -u
+          file "$BIN" | grep -q "$ARCH" \
+            || { echo "::error::ELF 架构与 $ABI 不符"; exit 1; }
+
+          if command -v "$QEMU" >/dev/null 2>&1; then
+            echo "=== 运行校验（$QEMU）==="
+            "$QEMU" "$BIN" -hide_banner -version | head -3
+            echo "--- 所需解码器 ---"
+            "$QEMU" "$BIN" -hide_banner -decoders 2>/dev/null \
+              | grep -Ew 'alac|ape|dsd_lsbf|dsd_msbf' | sort -u
+            echo "--- 所需解复用器 ---"
+            "$QEMU" "$BIN" -hide_banner -demuxers 2>/dev/null \
+              | grep -Ew 'dsf|ape|aiff|caf|mov' | sort -u
+          else
+            echo "::warning::$QEMU 不可用，跳过运行校验；能力以 configure 阶段的 enable 为准"
+            echo "=== 静态检查（二进制内含的能力名）==="
+            for tok in alac ape dsd_lsbf dsd_msbf dsf aiff caf soxr; do
+              if strings -a "$BIN" | grep -qw -- "$tok"; then
+                echo "  含 $tok"
+              else
+                echo "  未检出 $tok（可能被 strip，需实机确认）"
+              fi
+            done
+          fi
           echo "size=$SIZE" >> "$GITHUB_STEP_SUMMARY"
 
       - name: 上传 artifact
