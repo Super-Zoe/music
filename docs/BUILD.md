@@ -141,7 +141,11 @@ npm ci && npm run build-android
    最后发布到 release tag `ffmpeg-android`（asset 名 `libjellyfin_ffmpeg_<abi>.so`）。
 2. 之后每次 `build-hires.yml` 构建 APK 时会自动从该 release 下载二进制，
    放进 `android/app/src/main/jniLibs/<abi>/libjellyfin_ffmpeg.so`，一并打进 APK。
-3. 编译耗时约 20~40 分钟，成品用 `actions/cache` 缓存，不会每次重编。
+3. 实测编译全流程约 2~4 分钟（`--disable-everything` 后只编所需组件），
+   成品再用 `actions/cache` 缓存，不会每次重编。
+
+> 注：`build-ffmpeg.yml` **只接受手动触发**，刻意不监听 `release: published`——
+> 它自己发布的就是 release tag `ffmpeg-android`，监听会造成自我循环的无限编译。
 
 想用外部产物代替，可在仓库 Variables 配 `FFMPEG_ANDROID_URL`（可选 `FFMPEG_ANDROID_SHA256`），
 构建时会走 `scripts/fetch-jellyfin-ffmpeg.mjs` 做下载与校验；两处都取不到时
