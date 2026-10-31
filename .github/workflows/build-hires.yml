@@ -37,6 +37,11 @@ concurrency:
   group: hires-build-${{ github.ref }}
   cancel-in-progress: true
 
+# 发布 Release / 上传 asset 需要 contents: write，
+# 否则 GITHUB_TOKEN 只有读权限，会报 HTTP 403 Resource not accessible by integration
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -178,11 +183,13 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # 普通 push / 手动构建也要有可下载安装的成品：
-      # 固定更新到 tag apk-latest 的预发布里，同名 asset 用 --clobber 覆盖，
-      # 保证仓库里任何时候都有一个「最新可安装 APK」的稳定链接。
-      # apk-latest 不匹配下面的 v* 标签规则，也不会触发新的构建，不会自循环。
-      - name: 更新可下载 APK（rolling release）
+      # 无论怎么触发，都在 Release 里放一个可直接下载安装的 APK：
+      # - 打 v* tag         → 发到该 tag 的正式 Release
+      # - 普通 push / 手动构建 → 更新固定 tag apk-latest 的预发布（滚动更新）
+      # 统一走 gh release upload --clobber，同名 asset 直接覆盖，重复构建不会失败。
+      # apk-latest 不匹配 v* 规则，不会触发新的构建，不存在自循环。
+      # PR（尤其 fork PR）没有写权限，跳过发布，只保留 artifact。
+      - name: 发布可下载 APK
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -191,39 +198,40 @@ jobs:
           APK=android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
           OUT="MusicFree-HiRes-arm64-v8a.apk"
           cp "$APK" "$OUT"
-          NOTES="每次 main 分支 / 手动构建成功后自动更新此处的 APK。
-
-          - 架构：arm64-v8a（绝大多数现役安卓机）
-          - 内含 FFmpeg 静态可执行（libjellyfin_ffmpeg.so），支持 ALAC / APE / DSF / DFF
-          - 构建：$(git rev-parse --short HEAD) @ ${{ github.ref_name }}
-          - 签名：未配置正式签名机密时为 CI 自签，**只能与本次同签名安装共存，不能覆盖安装官方版**"
-          if gh release view apk-latest >/dev/null 2>&1; then
-            gh release upload apk-latest "$OUT" --clobber
-            gh release edit apk-latest --notes "$NOTES"
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+            EXTRA=()
+            TITLE="MusicFree-HiRes ${{ github.ref_name }}"
           else
-            gh release create apk-latest --prerelease \
-              --title "最新构建 APK（自动更新）" \
-              --target "$GITHUB_SHA" \
-              --notes "$NOTES" \
-              "$OUT"
+            TAG=apk-latest
+            EXTRA=(--prerelease)
+            TITLE="最新构建 APK（自动更新）"
           fi
-          SHA=$(sha256sum "$APK" | cut -d' ' -f1)
           SIZE=$(du -h "$APK" | cut -f1)
+          SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+          NOTES="自动构建产物 · $OUT
+
+          - 版本：${{ steps.ver.outputs.version }} (\`$(git rev-parse --short HEAD)\`)
+          - 架构：arm64-v8a（绝大多数现役安卓机），大小 $SIZE
+          - sha256：\`$SHA\`
+          - FFmpeg：内置静态可执行 lib/arm64-v8a/libjellyfin_ffmpeg.so，支持 ALAC / APE / DSF / DFF
+          - 触发：${{ github.event_name }} @ ${{ github.ref_name }}
+
+          安装注意：未配置正式签名机密时为 CI 自签包，与官方 MusicFree 签名不同，
+          需先卸载官方版再安装，不能覆盖升级。"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$OUT" --clobber
+            gh release edit "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" ${EXTRA[@]+"${EXTRA[@]}"} \
+              --title "$TITLE" --target "$GITHUB_SHA" --notes "$NOTES" "$OUT"
+          fi
           {
             echo ""
-            echo "### 📥 可下载安装"
-            echo "- https://github.com/${{ github.repository }}/releases/tag/apk-latest"
-            echo "- \`$OUT\` — $SIZE — sha256 \`$SHA\`"
+            echo "### 可下载安装"
+            echo "- https://github.com/${{ github.repository }}/releases/tag/$TAG"
+            echo "- $OUT — $SIZE — sha256 $SHA"
           } >> $GITHUB_STEP_SUMMARY
-
-      - name: 打 tag 时发布 Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 构建摘要
         run: |
